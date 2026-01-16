@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QThread>
 #include <QApplication>
+#include <QHeaderView>          //调整表头列宽
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -22,7 +23,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     pathEdit = new QLineEdit(centraWidget);
     keywordEdit = new QLineEdit(centraWidget);
-    resultList = new QListWidget(centraWidget);
+    //resultList = new QListWidget(centraWidget);
+    resultView = new QTableView(this);
+    model = new ResultTableModel(this);
     startBtn = new QPushButton("开始搜索",centraWidget);
     browseBtn = new QPushButton("浏览",centraWidget);
     stopBtn = new QPushButton("停止",centraWidget);
@@ -30,7 +33,7 @@ MainWindow::MainWindow(QWidget *parent)
     pathEdit->setPlaceholderText("请输入要寻找的地址");
     keywordEdit->setPlaceholderText("输入文件关键词（为空则搜索全部）");
 
-
+    resultView->setModel(model);
     //开始布局
     QHBoxLayout *topLayout = new QHBoxLayout();
     topLayout->addWidget(pathEdit,1);
@@ -39,9 +42,29 @@ MainWindow::MainWindow(QWidget *parent)
     topLayout->addWidget(startBtn);
     topLayout->addWidget(stopBtn);
 
+    //单选模式（一次只能选一行）
+    resultView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    //最后一列自动拉伸
+    //resultView->horizontalHeader()->setStretchLastSection(true);
+    //获取表头对象
+    QHeaderView *header = resultView->horizontalHeader();
+    //根据内容自动调整宽度（ResizeToContents）
+    header->setSectionResizeMode(QHeaderView::ResizeToContents);
+    //第1列（路径）：自动拉伸，占据剩余空间（Stretch）
+    header->setSectionResizeMode(1,QHeaderView::Stretch);
+
+    //隐藏原本左边的行号
+    resultView->verticalHeader()->setVisible(false);
+    //启用交替背景行
+    resultView->setAlternatingRowColors(true);
+    //不允许编辑内容
+    resultView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+
     QVBoxLayout *mainLayout = new QVBoxLayout();
     mainLayout->addLayout(topLayout);
-    mainLayout->addWidget(resultList);
+    //mainLayout->addWidget(resultList);
+    mainLayout->addWidget(resultView);
 
     centraWidget->setLayout(mainLayout);
 
@@ -67,7 +90,8 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(startBtn,&QPushButton::clicked,this,&MainWindow::onStartSearch);
     connect(stopBtn,&QPushButton::clicked,this,&MainWindow::onStopSearch);
-    connect(resultList,&QListWidget::itemDoubleClicked,this,&MainWindow::onFileDoubleClicked);
+    //connect(resultList,&QListWidget::itemDoubleClicked,this,&MainWindow::onFileDoubleClicked);
+    connect(resultView,&QTableView::doubleClicked,this,&MainWindow::onFileDoubleClicked);
 }
 
 MainWindow::~MainWindow() {
@@ -92,13 +116,14 @@ void MainWindow::onStartSearch()
     //2、校验
     if(path.isEmpty())
     {
-        resultList->addItem("错误：请先选择目录");
+        //resultList->addItem("错误：请先选择目录");
         return;
     }
 
     //3、模拟搜索
-    resultList->clear();
-    resultList->addItem("开始搜索");
+    //resultList->clear();
+    //resultList->addItem("开始搜索");
+    model->clear();
     startBtn->setEnabled(false);
 
     emit startSearchReq(path,keyword);
@@ -118,14 +143,19 @@ void MainWindow::onStartSearch()
 
 void MainWindow::onWOrkerFinished()
 {
-    resultList->addItem(QString("======搜索完毕========"));
+    //resultList->addItem(QString("======搜索完毕========"));
     startBtn->setEnabled(true);
+    stopBtn->setEnabled(false);
 }
 
-void MainWindow::onWorkerFoundFile(QString filePath)
+void MainWindow::onWorkerFoundFile(FileInfoData info)
 {
-    resultList->addItem(filePath);
-    resultList->scrollToBottom();
+    //resultList->addItem(filePath);
+    //resultList->scrollToBottom();
+    model->appendData(info);
+
+    //自动滚到底部
+    resultView->scrollToBottom();
 }
 
 void MainWindow::onStopSearch()
@@ -135,18 +165,27 @@ void MainWindow::onStopSearch()
         //workerThread->requestInterruption();
         worker->stopFlag = true;
 
-        resultList->addItem(QString("正在停止搜索……"));
+        //resultList->addItem(QString("正在停止搜索……"));
         stopBtn->setEnabled(false);
     }
 }
 
 
-void MainWindow::onFileDoubleClicked(QListWidgetItem* item)
+void MainWindow::onFileDoubleClicked(const QModelIndex &index)
 {
     //1、拿取列表中的文件路径
-    QString filePath = item->text();
+    //QString filePath = item->text();
     //2、转化为系统可识别的URL格式
-    QUrl url = QUrl::fromLocalFile(filePath);
+    //QUrl url = QUrl::fromLocalFile(filePath);
     //3、调用系统默认程序打开
-    QDesktopServices::openUrl(url);
+    //QDesktopServices::openUrl(url);
+
+    //获取被点击的那一行
+    int row = index.row();
+    //拿到完整路径
+    QModelIndex pathIndex = index.sibling(row,1);
+    //拿到数据
+    QString filePath = pathIndex.data().toString();
+    //打开文件
+    QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
 }

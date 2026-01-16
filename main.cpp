@@ -8,13 +8,13 @@
 
 int main(int argc, char *argv[])
 {
-    // 打印根目录下的所有资源
-    QDir dir(":/");
-    qDebug() << "资源根目录下的东西: " << dir.entryList();
+    // // 打印根目录下的所有资源
+    // QDir dir(":/");
+    // qDebug() << "资源根目录下的东西: " << dir.entryList();
 
-    // 打印 new 下面的东西
-    QDir dir2(":/new");
-    qDebug() << "new 下面的东西: " << dir2.entryList();
+    // // 打印 new 下面的东西
+    // QDir dir2(":/new");
+    // qDebug() << "new 下面的东西: " << dir2.entryList();
     QApplication a(argc, argv);
 
     QFile file(":/style.qss");
