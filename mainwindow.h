@@ -42,6 +42,7 @@ public slots:
     void onWOrkerFinished();
     void onStopSearch();
     void onFileDoubleClicked(const QModelIndex &index);
+    void onShowContextMenu(const QPoint &pos);
 
 signals:
     void startSearchReq(QString path, QString keyword);

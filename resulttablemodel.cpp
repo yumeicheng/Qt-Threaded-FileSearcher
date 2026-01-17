@@ -44,6 +44,7 @@ QVariant ResultTableModel::data(const QModelIndex &index, int role) const
     //3、根据不同的“角色”返回不同的数据
     if(role == Qt::DisplayRole)
     {
+        //qDebug() << "View 正在索要第" << index.row() << "行的数据";
         switch(index.column())
         {
             case Col_Namr: return item.fileName;
@@ -84,6 +85,27 @@ void ResultTableModel::appendData(const FileInfoData &info)
 
     //插入完成，通知view更新
     endInsertRows();
+}
+
+//删除1行数据
+void ResultTableModel::removeRowData(int row)
+{
+    //安全检查，防止行号越界
+    if(row < 0 || row >= static_cast<int>(m_dataList.size()))
+    {
+        return;
+    }
+
+    //通知view，要开始删除了
+    //参数：父索引，起始行，结束行
+    beginRemoveRows(QModelIndex(),row,row);
+
+    //真正的删除数据（操作vector）
+    //m_dataList.begin()+row就是要找到的哪个位置的迭代器
+    m_dataList.erase(m_dataList.begin()+row);
+
+    //通知view删除完毕，view会自动刷新界面，把删除的那一行变成没
+    endRemoveRows();
 }
 
 //清除

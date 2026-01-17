@@ -7,6 +7,11 @@
 #include <QThread>
 #include <QApplication>
 #include <QHeaderView>          //调整表头列宽
+#include <QMenu>
+#include <QAction>
+#include <QClipboard>
+#include <QProcess>             //调用explorer
+#include <QFile>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -34,6 +39,7 @@ MainWindow::MainWindow(QWidget *parent)
     keywordEdit->setPlaceholderText("输入文件关键词（为空则搜索全部）");
 
     resultView->setModel(model);
+    resultView->setContextMenuPolicy(Qt::CustomContextMenu);
     //开始布局
     QHBoxLayout *topLayout = new QHBoxLayout();
     topLayout->addWidget(pathEdit,1);
@@ -75,6 +81,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this,&MainWindow::startSearchReq,worker,&SearchWorker::doSearch);
     connect(worker,&SearchWorker::foundFile,this,&MainWindow::onWorkerFoundFile);
     connect(worker,&SearchWorker::searchFinished,this,&MainWindow::onWOrkerFinished);
+    connect(workerThread,&QThread::finished,worker,&QObject::deleteLater);
     workerThread->start();
 
     connect(browseBtn,&QPushButton::clicked,this,[=](){
@@ -92,6 +99,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(stopBtn,&QPushButton::clicked,this,&MainWindow::onStopSearch);
     //connect(resultList,&QListWidget::itemDoubleClicked,this,&MainWindow::onFileDoubleClicked);
     connect(resultView,&QTableView::doubleClicked,this,&MainWindow::onFileDoubleClicked);
+    connect(resultView,&QTableView::customContextMenuRequested,this,&MainWindow::onShowContextMenu);
 }
 
 MainWindow::~MainWindow() {
@@ -188,4 +196,91 @@ void MainWindow::onFileDoubleClicked(const QModelIndex &index)
     QString filePath = pathIndex.data().toString();
     //打开文件
     QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
+}
+
+
+void MainWindow::onShowContextMenu(const QPoint &pos)
+{
+    //以此点为根据，判断鼠标点在了哪一行
+    //indexAt是QTableView的方法，通过坐标找到数据索引
+    QModelIndex index = resultView->indexAt(pos);
+
+    //如果点在空白处（没点中任何行），直接返回，不弹菜单
+    if(!index.isValid())return;
+
+    //创建菜单对象
+    //parent设置为resultView，这样表格销毁时菜单也会销毁
+    QMenu *menu = new QMenu(resultView);
+
+    //创建“复制路径”动作
+    QAction *copyAction = new QAction("复制完整路径",menu);
+
+    //使用Lambda表达式处理点击逻辑
+    connect(copyAction,&QAction::triggered,this,[=](){
+        //记录当前行，第一列（Col_Path）的数据
+        //记住ResultTableMdel里定义的Col_Path是1
+        QString filePath = model->index(index.row(),1).data().toString();
+
+        //写入系统剪贴板
+        QClipboard *clipboard = QApplication::clipboard();
+        clipboard->setText(filePath);
+    });
+
+    //创建“打开所在目录”动作
+    QAction *openDirAction = new QAction("打开所在文件夹",menu);
+    connect(openDirAction,&QAction::triggered,this,[=](){
+        QString filePath = model->index(index.row(),1).data().toString();
+        //使用explorer.exe/select，filename可以在打开文件夹的同时，高亮选中这个文件
+        QStringList args;
+        args << "/select," << QDir::toNativeSeparators(filePath);
+        QProcess::startDetached("explorer.exe",args);
+    });
+
+    //创建“删除”动作
+    QAction *delAction = new QAction("删除文件",menu);
+    connect(delAction,&QAction::triggered,this,[=](){
+        int row = index.row();
+        QString filePath = model->index(index.row(),1).data().toString();
+
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,"确认删除",
+                                      "确认永久删除这个文件吗？\n" + filePath,
+                                      QMessageBox::Yes | QMessageBox::No);
+        if(reply == QMessageBox::Yes)
+        {
+            //物理删除（删除硬盘上的文件）
+            QFile file(filePath);
+            if(file.remove())
+            {
+                //如果物理删除成功，再删除界面上的（删vector里的）
+                model->removeRowData(row);
+            }
+            else{
+                QMessageBox::warning(this,"失败","删除失败，可能文件正在被占用或没有权限");
+            }
+        }
+    });
+
+    //创建“打开”动作
+    QAction *openAction = new QAction("打开",menu);
+    connect(openAction,&QAction::triggered,this,[=](){
+        this->onFileDoubleClicked(index);
+    });
+
+    //将动作添加到菜单
+    menu->addAction(openAction);
+    menu->addAction(copyAction);
+    menu->addAction(openDirAction);
+    menu->addSeparator();
+    menu->addAction(delAction);
+
+    //在在鼠标位置弹出菜单
+    //mapToClobal：把把表格内的相对坐标（pos）转换为屏幕的绝对坐标
+    //菜单必须在屏幕坐标系下弹出
+    menu->exec(resultView->viewport()->mapToGlobal(pos));
+
+    //内存清理：菜单关闭后自动delete
+    //因为menu是new出来的，如果不delete会内存泄漏
+    //setAttribute（Qt：：WA_DeleteOnClose）会在菜单关闭后自动销毁对象
+    menu->setAttribute(Qt::WA_DeleteOnClose);
 }

@@ -27,6 +27,9 @@ public:
     //添加1条数据
     void appendData(const FileInfoData &info);
 
+    //删除1调数据
+    void removeRowData(int row);
+
     //清空数据
     void clear();
 
