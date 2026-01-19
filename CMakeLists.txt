@@ -14,6 +14,7 @@ qt_add_executable(FileSearcher
     mainwindow.h
     searchworker.h searchworker.cpp
     res.qrc
+    logo.rc
     resulttablemodel.h resulttablemodel.cpp
 )
 
